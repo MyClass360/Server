@@ -1,0 +1,74 @@
+name: myclass 360 dev
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    # 실행환경
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    # JDK 17
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # application-dev.yml
+      - name: Copy dev yml
+        env:
+          DEV_SECRET: ${{ secrets.APPLICATION_DEV_YML }}
+          DEV_SECRET_DIR: src/main/resources
+          DEV_SECRET_DIR_FILE_NAME: application-dev.yml
+        run: echo $DEV_SECRET | base64 --decode >> $DEV_SECRET_DIR/$DEV_SECRET_DIR_FILE_NAME
+
+      # application-secret.yml
+      - name: Copy Secret
+        env:
+          DEV_SECRET: ${{ secrets.APPLICATION_SECRET_YML }}
+          DEV_SECRET_DIR: src/main/resources
+          DEV_SECRET_DIR_FILE_NAME: application-secret.yml
+        run: echo $DEV_SECRET | base64 --decode >> $DEV_SECRET_DIR/$DEV_SECRET_DIR_FILE_NAME
+
+      # ./gradlew 권한 설정
+      - name: ./gradlew 권한 설정
+        run: chmod +x ./gradlew
+
+      # Gradle Build
+      - name: Build with Gradle
+        run: |
+          ./gradlew clean
+          ./gradlew compileJava
+          ./gradlew build
+        env:
+          SPRING_PROFILES_ACTIVE: dev
+
+      # Docker Build하고 DockerHub에 Push
+      - name: Docker Build & Push to DockerHub
+        run: |
+          docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:latest
+
+      # Deploy to AWS EC2
+      - name: Deploy to AWS EC2
+        uses: appleboy/ssh-action@master
+        id: deploy
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.KEY }}
+          envs: GITHUB_SHA
+          script: |
+            sudo docker rm -f $(docker ps -qa)
+            sudo docker pull ${{ secrets.DOCKER_REPO  }}/directors-dev
+            docker-compose up -d
+            docker image prune -f
