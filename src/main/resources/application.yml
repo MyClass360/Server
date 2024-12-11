@@ -7,3 +7,5 @@ spring:
         - local
       dev-env:
         - dev
+    include:
+      - secret
