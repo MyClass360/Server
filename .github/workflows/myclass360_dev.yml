@@ -51,11 +51,18 @@ jobs:
         env:
           SPRING_PROFILES_ACTIVE: dev
 
+      # Docker Buildx 세팅
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       # Docker Build하고 DockerHub에 Push
       - name: Docker Build & Push to DockerHub
         run: |
           docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:latest .
+          docker buildx build -t ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:latest
 
       # docker-compose.yml 파일 EC2로 복사
